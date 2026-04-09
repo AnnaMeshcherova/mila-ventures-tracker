@@ -123,7 +123,7 @@ export default function UpdateForm({
       return "Please add at least one planned task.";
     }
     if (!commitment.trim()) {
-      return "Please add your commitment for this week.";
+      return "Please add one thing to get done by next week.";
     }
     return null;
   }
@@ -233,7 +233,7 @@ export default function UpdateForm({
         {currentUpdate.commitment && (
           <div className="space-y-3">
             <p className="text-sm font-semibold text-foreground">
-              One thing you will definitely complete this week
+              One thing to get done by next week
             </p>
             <p className="text-sm text-foreground">{currentUpdate.commitment}</p>
           </div>
@@ -337,11 +337,11 @@ export default function UpdateForm({
       {/* Commitment */}
       <div className="space-y-3">
         <label className="text-sm font-semibold text-foreground">
-          One thing you will definitely complete this week
+          One thing to get done by next week
         </label>
         <MentionInput
           value={commitment}
-          placeholder="Your #1 commitment for this week"
+          placeholder="Your #1 priority to finish by next week"
           profiles={profiles}
           fieldType="commitment"
           fieldIndex={0}

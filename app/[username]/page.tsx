@@ -177,7 +177,7 @@ export default function ProfilePage() {
               {update.commitment?.trim() && (
                 <div>
                   <p className="text-xs uppercase font-semibold text-amber-700 mb-1">
-                    Commitment
+                    To get done
                   </p>
                   <p className="text-sm bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                     {update.commitment}

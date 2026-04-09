@@ -117,7 +117,7 @@ export default async function SubmitPage() {
               {previousUpdate.commitment && (
                 <div>
                   <p className="text-xs font-medium text-muted-foreground">
-                    Commitment
+                    To get done
                   </p>
                   <p className="mt-1 text-sm text-foreground">
                     {previousUpdate.commitment}

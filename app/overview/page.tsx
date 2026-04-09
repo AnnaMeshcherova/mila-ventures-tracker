@@ -200,7 +200,7 @@ export default function OverviewPage() {
                 <ItemRow key={i} name={item.name} text={item.text}>
                   {item.hasCommitment && (
                     <span className="text-xs bg-amber-50 text-amber-800 border border-amber-200 rounded-full px-2 py-0.5 shrink-0">
-                      Commitment
+                      To get done
                     </span>
                   )}
                 </ItemRow>
@@ -221,7 +221,7 @@ export default function OverviewPage() {
 
           {/* 3. Last Week's Commitments */}
           {commitmentItems.length > 0 && (
-            <OverviewSection title="Last Week's Commitments" borderColor="border-blue-400">
+            <OverviewSection title="Last Week's To Get Done" borderColor="border-blue-400">
               {commitmentItems.map((item, i) => (
                 <ItemRow key={i} name={item.name} text={item.text} />
               ))}
