@@ -55,6 +55,16 @@ CREATE OR REPLACE FUNCTION sync_mentions(
 )
 RETURNS void AS $$
 BEGIN
+  -- Verify caller is the author (prevent forged mentions)
+  IF p_author_user_id != auth.uid() THEN
+    RAISE EXCEPTION 'unauthorized: cannot sync mentions for another user';
+  END IF;
+
+  -- Verify the update belongs to the caller
+  IF NOT EXISTS (SELECT 1 FROM weekly_updates WHERE id = p_update_id AND user_id = auth.uid()) THEN
+    RAISE EXCEPTION 'unauthorized: update does not belong to caller';
+  END IF;
+
   -- Delete existing mentions for this update
   DELETE FROM mentions WHERE update_id = p_update_id AND author_user_id = p_author_user_id;
 
@@ -116,4 +126,4 @@ BEGIN
     ) @@ plainto_tsquery('english', search_query)
   ORDER BY wu.week_start DESC;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY INVOKER;

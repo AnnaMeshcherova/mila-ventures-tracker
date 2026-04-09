@@ -156,11 +156,22 @@ export default function UpdateForm({
           .single();
 
         if (update) {
-          await supabase.rpc("sync_mentions", {
+          const { error: mentionError } = await supabase.rpc("sync_mentions", {
             p_update_id: update.id,
             p_author_user_id: user.id,
-            p_mentions: JSON.stringify(allMentions),
+            p_mentions: allMentions,
           });
+
+          if (mentionError) {
+            // Roll back: set update back to draft since mentions failed
+            await supabase
+              .from("weekly_updates")
+              .update({ is_draft: true })
+              .eq("id", update.id);
+            toast.error("Failed to save mentions. Your update was saved as a draft.");
+            setSubmitting(false);
+            return;
+          }
         }
       }
 

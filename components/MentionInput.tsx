@@ -115,6 +115,17 @@ export function MentionInput({
     const newValue = e.target.value;
     const cursorPos = e.target.selectionStart ?? newValue.length;
 
+    // Prune stale mentions (names no longer in the text)
+    const prunedMentions = mentions.filter((m) => {
+      const profile = profiles.find((p) => p.id === m.mentioned_user_id);
+      return profile && newValue.includes(profile.full_name);
+    });
+    if (prunedMentions.length !== mentions.length) {
+      setMentions(prunedMentions);
+      onChange(newValue, prunedMentions);
+      // Don't return — still need to check for new @ trigger below
+    }
+
     // Check if we should open/update the mention dropdown
     const textUpToCursor = newValue.slice(0, cursorPos);
     const lastAtIndex = textUpToCursor.lastIndexOf("@");

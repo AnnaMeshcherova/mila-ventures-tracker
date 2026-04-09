@@ -17,7 +17,7 @@ interface Mention {
   created_at: string;
   author_user_id: string;
   mentioned_user_id: string;
-  weekly_update_id: string;
+  update_id: string;
   author_name: string;
   week_start: string | null;
 }
@@ -77,7 +77,7 @@ export default function ActionItemsPage() {
         created_at: m.created_at,
         author_user_id: m.author_user_id,
         mentioned_user_id: m.mentioned_user_id,
-        weekly_update_id: m.weekly_update_id,
+        update_id: m.update_id,
         author_name: m.profiles?.full_name ?? "Unknown",
         week_start: m.weekly_updates?.week_start ?? null,
       }));
@@ -100,7 +100,7 @@ export default function ActionItemsPage() {
     }
 
     const authorIds = [...new Set(mentionsData.map((m: any) => m.author_user_id))];
-    const updateIds = [...new Set(mentionsData.map((m: any) => m.weekly_update_id))];
+    const updateIds = [...new Set(mentionsData.map((m: any) => m.update_id))];
 
     const [profilesRes, updatesRes] = await Promise.all([
       authorIds.length > 0
@@ -130,9 +130,9 @@ export default function ActionItemsPage() {
       created_at: m.created_at,
       author_user_id: m.author_user_id,
       mentioned_user_id: m.mentioned_user_id,
-      weekly_update_id: m.weekly_update_id,
+      update_id: m.update_id,
       author_name: profileMap.get(m.author_user_id) ?? "Unknown",
-      week_start: updateMap.get(m.weekly_update_id) ?? null,
+      week_start: updateMap.get(m.update_id) ?? null,
     }));
 
     setMentions(mapped);
