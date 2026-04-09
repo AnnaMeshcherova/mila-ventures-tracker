@@ -216,45 +216,47 @@ export default function OverviewPage() {
       setSections(builtSections);
       setLoading(false);
 
-      // Generate summaries for stale/missing sections
-      for (const section of builtSections) {
-        if (!section.loading) continue; // already has fresh cache
+      // Generate summaries for stale/missing sections (in parallel)
+      const staleSections = builtSections.filter((s) => s.loading);
+      if (staleSections.length > 0) {
+        await Promise.all(
+          staleSections.map(async (section) => {
+            try {
+              const res = await fetch("/api/generate-summary", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  weekStart: currentWeek,
+                  sectionType: section.type,
+                  items: section.items,
+                }),
+              });
 
-        try {
-          const res = await fetch("/api/generate-summary", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              weekStart: currentWeek,
-              sectionType: section.type,
-              items: section.items,
-            }),
-          });
-
-          if (res.ok) {
-            const { summary } = await res.json();
-            setSections((prev) =>
-              prev.map((s) =>
-                s.type === section.type
-                  ? { ...s, summary, loading: false }
-                  : s
-              )
-            );
-          } else {
-            // Fall back to no summary (show bullet points)
-            setSections((prev) =>
-              prev.map((s) =>
-                s.type === section.type ? { ...s, loading: false } : s
-              )
-            );
-          }
-        } catch {
-          setSections((prev) =>
-            prev.map((s) =>
-              s.type === section.type ? { ...s, loading: false } : s
-            )
-          );
-        }
+              if (res.ok) {
+                const { summary } = await res.json();
+                setSections((prev) =>
+                  prev.map((s) =>
+                    s.type === section.type
+                      ? { ...s, summary, loading: false }
+                      : s
+                  )
+                );
+              } else {
+                setSections((prev) =>
+                  prev.map((s) =>
+                    s.type === section.type ? { ...s, loading: false } : s
+                  )
+                );
+              }
+            } catch {
+              setSections((prev) =>
+                prev.map((s) =>
+                  s.type === section.type ? { ...s, loading: false } : s
+                )
+              );
+            }
+          })
+        );
       }
     }
     fetchData();
