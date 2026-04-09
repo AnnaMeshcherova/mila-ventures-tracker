@@ -8,7 +8,6 @@ import { useMentionBadge } from "@/components/MentionBadgeProvider";
 const navLinks = [
   { href: "/overview", label: "Overview", shortLabel: "Overview" },
   { href: "/dashboard", label: "Dashboard", shortLabel: "Dash" },
-  { href: "/submit", label: "Submit", shortLabel: "Submit" },
   { href: "/history", label: "History", shortLabel: "History" },
   { href: "/action-items", label: "Actions", shortLabel: "Actions" },
 ];
@@ -17,7 +16,6 @@ export function NavBar() {
   const pathname = usePathname();
   const { count } = useMentionBadge();
 
-  // Don't show nav on auth pages or onboarding
   if (pathname?.startsWith("/auth") || pathname === "/onboarding") {
     return null;
   }
@@ -26,7 +24,7 @@ export function NavBar() {
     <nav className="sticky top-0 z-50 h-14 bg-card border-b border-border">
       <div className="max-w-[1200px] mx-auto px-4 md:px-8 h-full flex items-center justify-between">
         <div className="flex items-center gap-6 md:gap-8">
-          <Link href="/dashboard" className="text-lg font-bold tracking-tight">
+          <Link href="/overview" className="text-lg font-bold tracking-tight">
             Mila Ventures
           </Link>
           <div className="flex items-center gap-1">
@@ -52,11 +50,17 @@ export function NavBar() {
             ))}
           </div>
         </div>
-        <div className="flex items-center">
-          <div className="w-8 h-8 rounded-full bg-accent text-accent-foreground flex items-center justify-center text-xs font-semibold">
-            MV
-          </div>
-        </div>
+        <Link
+          href="/submit"
+          className={cn(
+            "px-4 py-1.5 rounded-md text-[13px] font-medium transition-colors",
+            pathname === "/submit"
+              ? "bg-primary text-primary-foreground"
+              : "bg-primary text-primary-foreground hover:bg-primary/90"
+          )}
+        >
+          Submit
+        </Link>
       </div>
     </nav>
   );
