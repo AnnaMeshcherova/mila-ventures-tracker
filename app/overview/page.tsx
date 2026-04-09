@@ -225,6 +225,8 @@ export default function OverviewPage() {
               const res = await fetch("/api/generate-summary", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                redirect: "error",
                 body: JSON.stringify({
                   weekStart: currentWeek,
                   sectionType: section.type,
@@ -233,15 +235,17 @@ export default function OverviewPage() {
               });
 
               if (res.ok) {
-                const { summary } = await res.json();
+                const data = await res.json();
                 setSections((prev) =>
                   prev.map((s) =>
                     s.type === section.type
-                      ? { ...s, summary, loading: false }
+                      ? { ...s, summary: data.summary, loading: false }
                       : s
                   )
                 );
               } else {
+                const errText = await res.text().catch(() => "unknown");
+                console.error(`Summary generation failed for ${section.type}: ${res.status} ${errText}`);
                 setSections((prev) =>
                   prev.map((s) =>
                     s.type === section.type ? { ...s, loading: false } : s

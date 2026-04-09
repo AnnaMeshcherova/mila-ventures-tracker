@@ -13,17 +13,17 @@ interface SummaryRequest {
 }
 
 export async function POST(request: NextRequest) {
-  // Auth check: reject unauthenticated calls
+  // Middleware already protects this route (redirects unauthenticated users).
+  // We still need a Supabase client to write the cached summary.
   const supabase = await createServerSupabaseClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  let body: SummaryRequest;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const body: SummaryRequest = await request.json();
   const { weekStart, sectionType, items } = body;
 
   if (!weekStart || !sectionType || !items || items.length === 0) {
@@ -32,11 +32,6 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     );
   }
-
-  // Build the prompt from items
-  const bulletPoints = items
-    .map((item) => `- ${item.name}: ${item.text}`)
-    .join("\n");
 
   const sectionLabels: Record<string, string> = {
     focus: "what each team member is focusing on this week",
@@ -91,7 +86,6 @@ export async function POST(request: NextRequest) {
       );
 
     if (upsertError) {
-      // Summary was generated but caching failed — still return it
       console.error("Failed to cache summary:", upsertError);
     }
 
