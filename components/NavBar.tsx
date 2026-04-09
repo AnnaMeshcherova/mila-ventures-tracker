@@ -6,8 +6,8 @@ import { cn } from "@/lib/utils";
 import { useMentionBadge } from "@/components/MentionBadgeProvider";
 
 const navLinks = [
-  { href: "/dashboard", label: "Dashboard", shortLabel: "Dash" },
   { href: "/overview", label: "Overview", shortLabel: "Overview" },
+  { href: "/dashboard", label: "Dashboard", shortLabel: "Dash" },
   { href: "/submit", label: "Submit", shortLabel: "Submit" },
   { href: "/history", label: "History", shortLabel: "History" },
   { href: "/action-items", label: "Actions", shortLabel: "Actions" },
