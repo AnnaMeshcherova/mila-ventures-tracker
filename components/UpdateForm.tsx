@@ -105,6 +105,10 @@ export default function UpdateForm({
   }
 
   async function handleBlurSave() {
+    // Don't auto-save as draft when editing a submitted update.
+    // That would flip is_draft to true and hide it from the dashboard.
+    if (isSubmitted) return;
+
     try {
       await upsertUpdate(true);
       toast.success("Draft saved");
