@@ -124,11 +124,22 @@ export default function OverviewPage() {
   // Collect items across all updates
   type ItemWithAuthor = { name: string; text: string; hasCommitment?: boolean };
 
-  const focusItems: ItemWithAuthor[] = updates.flatMap((u) =>
-    (u.planned_tasks ?? [])
+  const focusItems: ItemWithAuthor[] = updates.flatMap((u) => {
+    const tasks = (u.planned_tasks ?? [])
       .filter((t) => t.trim())
-      .map((t) => ({ name: u.full_name, text: t, hasCommitment: !!u.commitment }))
-  );
+      .map((t) => ({ name: u.full_name, text: t, hasCommitment: false }));
+    // Add the commitment as its own item with the badge (if it exists and isn't already a planned task)
+    if (u.commitment?.trim()) {
+      const commitmentAlreadyInTasks = tasks.some((t) => t.text === u.commitment);
+      if (!commitmentAlreadyInTasks) {
+        tasks.unshift({ name: u.full_name, text: u.commitment, hasCommitment: true });
+      } else {
+        const match = tasks.find((t) => t.text === u.commitment);
+        if (match) match.hasCommitment = true;
+      }
+    }
+    return tasks;
+  });
 
   const blockerItems: ItemWithAuthor[] = updates.flatMap((u) =>
     (u.blockers ?? [])
