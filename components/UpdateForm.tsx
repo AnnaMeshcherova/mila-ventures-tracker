@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
@@ -44,6 +44,7 @@ export default function UpdateForm({
 
   const [editing, setEditing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
 
   const readOnly = isSubmitted && !editing;
 
@@ -105,9 +106,9 @@ export default function UpdateForm({
   }
 
   async function handleBlurSave() {
-    // Don't auto-save as draft when editing a submitted update.
-    // That would flip is_draft to true and hide it from the dashboard.
-    if (isSubmitted) return;
+    // Don't auto-save as draft when editing a submitted update
+    // or when a submit is already in progress (blur fires when clicking Submit button)
+    if (isSubmitted || submitting || isSubmittingRef.current) return;
 
     try {
       await upsertUpdate(true);
@@ -140,6 +141,7 @@ export default function UpdateForm({
       return;
     }
 
+    isSubmittingRef.current = true;
     setSubmitting(true);
 
     try {
