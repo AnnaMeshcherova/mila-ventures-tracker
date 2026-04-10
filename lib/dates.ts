@@ -1,29 +1,32 @@
 /**
  * Date utilities for weekly update tracking.
+ * Weeks start on FRIDAY. "This week" = most recent Friday through next Thursday.
  * All functions compute dates client-side using the user's local timezone
  * to avoid UTC date boundary issues on Vercel.
  */
 
-/** Returns ISO date (YYYY-MM-DD) of the most recent Monday, or today if today is Monday. */
-export function getThisMonday(date: Date = new Date()): string {
+/** Returns ISO date (YYYY-MM-DD) of the most recent Friday, or today if today is Friday. */
+export function getThisFriday(date: Date = new Date()): string {
   const d = new Date(date);
   const day = d.getDay();
-  // day: 0=Sun, 1=Mon, ..., 6=Sat
-  const diff = day === 0 ? 6 : day - 1;
+  // day: 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat
+  // Days since last Friday:
+  // Fri(5)=0, Sat(6)=1, Sun(0)=2, Mon(1)=3, Tue(2)=4, Wed(3)=5, Thu(4)=6
+  const diff = (day - 5 + 7) % 7;
   d.setDate(d.getDate() - diff);
   return formatDate(d);
 }
 
-/** Returns ISO date of the Monday before getThisMonday(). */
-export function getPreviousMonday(date: Date = new Date()): string {
-  const thisMonday = new Date(getThisMonday(date) + "T00:00:00");
-  thisMonday.setDate(thisMonday.getDate() - 7);
-  return formatDate(thisMonday);
+/** Returns ISO date of the Friday before getThisFriday(). */
+export function getPreviousFriday(date: Date = new Date()): string {
+  const thisFriday = new Date(getThisFriday(date) + "T00:00:00");
+  thisFriday.setDate(thisFriday.getDate() - 7);
+  return formatDate(thisFriday);
 }
 
-/** Returns human-readable label like "Week of Apr 6, 2026" */
-export function formatWeekLabel(mondayDate: string): string {
-  const d = new Date(mondayDate + "T00:00:00");
+/** Returns human-readable label like "Week of Apr 11, 2026" */
+export function formatWeekLabel(weekStartDate: string): string {
+  const d = new Date(weekStartDate + "T00:00:00");
   const month = d.toLocaleDateString("en-US", { month: "short" });
   const day = d.getDate();
   const year = d.getFullYear();
@@ -36,13 +39,6 @@ function formatDate(d: Date): string {
   const month = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
-}
-
-/** Returns the Monday N weeks before the given Monday date string. */
-export function getMonday(weekOffset: number, fromDate: Date = new Date()): string {
-  const monday = new Date(getThisMonday(fromDate) + "T00:00:00");
-  monday.setDate(monday.getDate() + weekOffset * 7);
-  return formatDate(monday);
 }
 
 /** Returns relative time string like "2 min ago", "1 hour ago" */
@@ -59,3 +55,15 @@ export function timeAgo(dateString: string): string {
   const days = Math.floor(hours / 24);
   return `${days} day${days > 1 ? "s" : ""} ago`;
 }
+
+/** Returns the Friday N weeks offset from the current week's Friday. */
+export function getWeekStart(weekOffset: number, fromDate: Date = new Date()): string {
+  const friday = new Date(getThisFriday(fromDate) + "T00:00:00");
+  friday.setDate(friday.getDate() + weekOffset * 7);
+  return formatDate(friday);
+}
+
+// Legacy aliases — keep for any code that still references the old names
+export const getThisMonday = getThisFriday;
+export const getPreviousMonday = getPreviousFriday;
+export const getMonday = getWeekStart;

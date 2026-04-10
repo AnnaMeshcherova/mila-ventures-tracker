@@ -37,9 +37,9 @@ export default async function SubmitPage() {
 
   return (
     <div className="mx-auto max-w-[1200px] px-4 py-8 sm:px-6 lg:px-8">
-      {today !== 1 && (
+      {today !== 5 && (
         <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-          Updates are typically submitted on Mondays. You can still submit
+          Updates are typically submitted on Fridays. You can still submit
           anytime.
         </div>
       )}
