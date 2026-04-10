@@ -26,13 +26,16 @@ export default async function SubmitPage() {
     .eq("week_start", thisMonday)
     .maybeSingle();
 
-  // Fetch previous week's submitted update with new fields
+  // Fetch the most recent submitted update before this week
+  // (uses lt instead of eq to handle the Monday→Friday migration gracefully)
   const { data: previousUpdate } = await supabase
     .from("weekly_updates")
     .select("*, commitment, announcements")
     .eq("user_id", user.id)
-    .eq("week_start", previousMonday)
+    .lt("week_start", thisMonday)
     .eq("is_draft", false)
+    .order("week_start", { ascending: false })
+    .limit(1)
     .maybeSingle();
 
   return (
