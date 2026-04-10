@@ -23,15 +23,18 @@ export default function UpdateForm({
 
   const isSubmitted = currentUpdate && !currentUpdate.is_draft;
 
-  const [achievements, setAchievements] = useState<string[]>(
-    currentUpdate?.achievements ?? ["", "", ""]
-  );
-  const [plannedTasks, setPlannedTasks] = useState<string[]>(
-    currentUpdate?.planned_tasks ?? ["", "", ""]
-  );
-  const [blockers, setBlockers] = useState<string[]>(
-    currentUpdate?.blockers ?? ["", ""]
-  );
+  const [achievements, setAchievements] = useState<string[]>(() => {
+    const a = currentUpdate?.achievements;
+    return Array.isArray(a) && a.length > 0 ? a : ["", "", ""];
+  });
+  const [plannedTasks, setPlannedTasks] = useState<string[]>(() => {
+    const t = currentUpdate?.planned_tasks;
+    return Array.isArray(t) && t.length > 0 ? t : ["", "", ""];
+  });
+  const [blockers, setBlockers] = useState<string[]>(() => {
+    const b = currentUpdate?.blockers;
+    return Array.isArray(b) && b.length > 0 ? b : ["", ""];
+  });
   const [commitment, setCommitment] = useState<string>(
     currentUpdate?.commitment ?? ""
   );
