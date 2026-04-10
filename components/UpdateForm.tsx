@@ -201,7 +201,7 @@ export default function UpdateForm({
       <div className="space-y-6">
         <div className="space-y-3">
           <p className="text-sm font-semibold text-foreground">
-            What did you get done last week?
+            What did you get done this week?
           </p>
           <ul className="list-disc pl-5 space-y-1 text-sm text-foreground">
             {currentUpdate.achievements.map((item: string, i: number) => (
@@ -212,7 +212,7 @@ export default function UpdateForm({
 
         <div className="space-y-3">
           <p className="text-sm font-semibold text-foreground">
-            What will you focus on this week?
+            What will you focus on next week?
           </p>
           <ul className="list-disc pl-5 space-y-1 text-sm text-foreground">
             {currentUpdate.planned_tasks.map((item: string, i: number) => (
@@ -268,7 +268,7 @@ export default function UpdateForm({
       {/* Achievements */}
       <div className="space-y-3">
         <label className="text-sm font-semibold text-foreground">
-          What did you get done last week?
+          What did you get done this week?
         </label>
         {achievements.map((val, i) => (
           <MentionInput
@@ -292,7 +292,7 @@ export default function UpdateForm({
       {/* Planned Tasks */}
       <div className="space-y-3">
         <label className="text-sm font-semibold text-foreground">
-          What will you focus on this week?
+          What will you focus on next week?
         </label>
         {plannedTasks.map((val, i) => (
           <MentionInput
