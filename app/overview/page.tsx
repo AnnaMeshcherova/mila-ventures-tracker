@@ -7,39 +7,11 @@ import { getThisMonday } from "@/lib/dates";
 import WeekSelector from "@/components/WeekSelector";
 import { Skeleton } from "@/components/ui/skeleton";
 
-interface Profile {
-  id: string;
-  full_name: string;
-}
-
-interface WeeklyUpdate {
-  user_id: string;
-  planned_tasks: string[];
-  blockers: string[];
-  achievements: string[];
-  announcements: string[];
-  commitment: string | null;
-  updated_at: string;
-}
-
-interface UpdateWithProfile extends WeeklyUpdate {
-  full_name: string;
-}
-
-interface PersonItems {
-  name: string;
-  items: string[];
-}
-
-interface SectionData {
-  type: string;
+interface Theme {
   title: string;
-  borderColor: string;
-  emoji: string;
-  allItems: { name: string; text: string }[];
-  byPerson: PersonItems[];
-  summary: string | null;
-  loading: boolean;
+  summary: string;
+  people: string[];
+  isBlocker: boolean;
 }
 
 function getInitials(name: string): string {
@@ -49,34 +21,15 @@ function getInitials(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-/** Group flat items into per-person buckets */
-function groupByPerson(items: { name: string; text: string }[]): PersonItems[] {
-  const map = new Map<string, string[]>();
-  for (const item of items) {
-    const existing = map.get(item.name) ?? [];
-    existing.push(item.text);
-    map.set(item.name, existing);
-  }
-  return Array.from(map.entries()).map(([name, items]) => ({ name, items }));
-}
-
 export default function OverviewPage() {
   const router = useRouter();
   const supabase = createClient();
 
   const [currentWeek, setCurrentWeek] = useState(getThisMonday());
-  const [sections, setSections] = useState<SectionData[]>([]);
+  const [themes, setThemes] = useState<Theme[]>([]);
   const [loading, setLoading] = useState(true);
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
-
-  function toggleSection(type: string) {
-    setExpandedSections((prev) => {
-      const next = new Set(prev);
-      if (next.has(type)) next.delete(type);
-      else next.add(type);
-      return next;
-    });
-  }
+  const [generating, setGenerating] = useState(false);
+  const [teamCount, setTeamCount] = useState(0);
 
   useEffect(() => {
     async function checkAuth() {
@@ -89,265 +42,205 @@ export default function OverviewPage() {
   useEffect(() => {
     async function fetchData() {
       setLoading(true);
-      setExpandedSections(new Set());
+      setThemes([]);
 
       const prevWeekDate = new Date(currentWeek + "T00:00:00");
       prevWeekDate.setDate(prevWeekDate.getDate() - 7);
       const prevWeek = prevWeekDate.toISOString().split("T")[0];
 
-      const [profilesRes, updatesRes, prevUpdatesRes, summariesRes] =
-        await Promise.all([
-          supabase.from("profiles").select("id, full_name"),
-          supabase
-            .from("weekly_updates")
-            .select("user_id, planned_tasks, blockers, achievements, announcements, commitment, updated_at")
-            .eq("week_start", currentWeek)
-            .eq("is_draft", false),
-          supabase
-            .from("weekly_updates")
-            .select("user_id, commitment, updated_at")
-            .eq("week_start", prevWeek)
-            .eq("is_draft", false),
-          supabase
-            .from("weekly_summaries")
-            .select("section_type, summary_text, generated_at")
-            .eq("week_start", currentWeek),
-        ]);
+      const [updatesRes, prevUpdatesRes, cachedRes] = await Promise.all([
+        supabase
+          .from("weekly_updates")
+          .select("user_id, planned_tasks, blockers, achievements, announcements, commitment, updated_at, profiles(full_name)")
+          .eq("week_start", currentWeek)
+          .eq("is_draft", false),
+        supabase
+          .from("weekly_updates")
+          .select("user_id, commitment, profiles(full_name)")
+          .eq("week_start", prevWeek)
+          .eq("is_draft", false),
+        supabase
+          .from("weekly_summaries")
+          .select("summary_text, generated_at")
+          .eq("week_start", currentWeek)
+          .eq("section_type", "themes")
+          .maybeSingle(),
+      ]);
 
-      const profileMap = new Map(
-        (profilesRes.data ?? []).map((p: any) => [p.id, p.full_name])
-      );
+      const updates = updatesRes.data ?? [];
+      const prevUpdates = prevUpdatesRes.data ?? [];
+      setTeamCount(updates.length);
 
-      const updates: UpdateWithProfile[] = (updatesRes.data ?? []).map((u: any) => ({
-        ...u,
-        planned_tasks: u.planned_tasks ?? [],
-        blockers: u.blockers ?? [],
-        achievements: u.achievements ?? [],
-        announcements: u.announcements ?? [],
-        commitment: u.commitment ?? null,
-        full_name: profileMap.get(u.user_id) ?? "Unknown",
-      }));
+      if (updates.length === 0) {
+        setLoading(false);
+        return;
+      }
 
-      const prevUpdates = (prevUpdatesRes.data ?? []).map((u: any) => ({
-        ...u,
-        commitment: u.commitment ?? null,
-        full_name: profileMap.get(u.user_id) ?? "Unknown",
-      }));
-
-      const cachedSummaries = new Map(
-        (summariesRes.data ?? []).map((s: any) => [
-          s.section_type,
-          { text: s.summary_text, generated_at: s.generated_at },
-        ])
-      );
-
+      // Check cache freshness
       const latestUpdateTime = Math.max(
-        ...(updatesRes.data ?? []).map((u: any) => new Date(u.updated_at).getTime()),
+        ...updates.map((u: any) => new Date(u.updated_at).getTime()),
         0
       );
 
-      // Build section items
-      const focusItems = updates.flatMap((u) => {
-        const tasks = (u.planned_tasks ?? [])
-          .filter((t) => t.trim())
-          .map((t) => ({ name: u.full_name, text: t }));
-        if (u.commitment?.trim()) {
-          const exists = tasks.some((t) => t.text === u.commitment);
-          if (!exists) {
-            tasks.unshift({ name: u.full_name, text: u.commitment! });
-          }
+      if (
+        cachedRes.data?.summary_text &&
+        new Date(cachedRes.data.generated_at).getTime() >= latestUpdateTime
+      ) {
+        try {
+          const cached = JSON.parse(cachedRes.data.summary_text);
+          setThemes(cached);
+          setLoading(false);
+          return;
+        } catch {
+          // Cache corrupted, regenerate
         }
-        return tasks;
-      });
+      }
 
-      const blockerItems = updates.flatMap((u) =>
-        (u.blockers ?? []).filter((b) => b.trim()).map((b) => ({ name: u.full_name, text: b }))
+      // Build data for LLM
+      const getName = (u: any) => (u.profiles as any)?.full_name ?? "Unknown";
+
+      const focusItems = updates.flatMap((u: any) =>
+        (u.planned_tasks ?? []).filter((t: string) => t.trim()).map((t: string) => ({ name: getName(u), text: t }))
       );
-
+      const blockerItems = updates.flatMap((u: any) =>
+        (u.blockers ?? []).filter((b: string) => b.trim()).map((b: string) => ({ name: getName(u), text: b }))
+      );
+      const achievementItems = updates.flatMap((u: any) =>
+        (u.achievements ?? []).filter((a: string) => a.trim()).map((a: string) => ({ name: getName(u), text: a }))
+      );
+      const announcementItems = updates.flatMap((u: any) =>
+        (u.announcements ?? []).filter((a: string) => a.trim()).map((a: string) => ({ name: getName(u), text: a }))
+      );
       const commitmentItems = prevUpdates
         .filter((u: any) => u.commitment?.trim())
-        .map((u: any) => ({ name: u.full_name, text: u.commitment }));
+        .map((u: any) => ({ name: getName(u), text: u.commitment }));
 
-      const achievementItems = updates.flatMap((u) =>
-        (u.achievements ?? []).filter((a) => a.trim()).map((a) => ({ name: u.full_name, text: a }))
-      );
+      setLoading(false);
+      setGenerating(true);
 
-      const announcementItems = updates.flatMap((u) =>
-        (u.announcements ?? []).filter((a) => a.trim()).map((a) => ({ name: u.full_name, text: a }))
-      );
-
-      const sectionDefs = [
-        { type: "focus", title: "Focus Next Week", borderColor: "border-amber-400", emoji: "🎯", items: focusItems },
-        { type: "blockers", title: "Blockers & Help Needed", borderColor: "border-red-500", emoji: "🚧", items: blockerItems },
-        { type: "commitments", title: "Committed To Get Done", borderColor: "border-blue-400", emoji: "🔒", items: commitmentItems },
-        { type: "achievements", title: "Done This Week", borderColor: "border-green-500", emoji: "✅", items: achievementItems },
-        { type: "announcements", title: "Announcements", borderColor: "border-border", emoji: "📢", items: announcementItems },
-      ];
-
-      const builtSections: SectionData[] = sectionDefs
-        .filter((s) => s.items.length > 0)
-        .map((s) => {
-          const cached = cachedSummaries.get(s.type);
-          const isFresh = cached && new Date(cached.generated_at).getTime() >= latestUpdateTime;
-
-          return {
-            ...s,
-            allItems: s.items,
-            byPerson: groupByPerson(s.items),
-            summary: isFresh ? cached.text : null,
-            loading: !isFresh,
-          };
+      // Call LLM for theme extraction
+      try {
+        const res = await fetch("/api/generate-summary", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          redirect: "error",
+          body: JSON.stringify({
+            weekStart: currentWeek,
+            data: {
+              focus: focusItems,
+              blockers: blockerItems,
+              achievements: achievementItems,
+              announcements: announcementItems,
+              commitments: commitmentItems,
+            },
+          }),
         });
 
-      setSections(builtSections);
-      setLoading(false);
-
-      // Generate summaries for stale/missing sections (in parallel)
-      const staleSections = builtSections.filter((s) => s.loading);
-      if (staleSections.length > 0) {
-        await Promise.all(
-          staleSections.map(async (section) => {
-            try {
-              const res = await fetch("/api/generate-summary", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                credentials: "include",
-                redirect: "error",
-                body: JSON.stringify({
-                  weekStart: currentWeek,
-                  sectionType: section.type,
-                  items: section.allItems,
-                }),
-              });
-              if (res.ok) {
-                const data = await res.json();
-                setSections((prev) =>
-                  prev.map((s) =>
-                    s.type === section.type ? { ...s, summary: data.summary, loading: false } : s
-                  )
-                );
-              } else {
-                setSections((prev) =>
-                  prev.map((s) => (s.type === section.type ? { ...s, loading: false } : s))
-                );
-              }
-            } catch {
-              setSections((prev) =>
-                prev.map((s) => (s.type === section.type ? { ...s, loading: false } : s))
-              );
-            }
-          })
-        );
+        if (res.ok) {
+          const { themes: extractedThemes } = await res.json();
+          setThemes(extractedThemes);
+        } else {
+          console.error("Theme extraction failed:", await res.text().catch(() => ""));
+        }
+      } catch (err) {
+        console.error("Theme extraction error:", err);
       }
+
+      setGenerating(false);
     }
     fetchData();
   }, [currentWeek, supabase]);
 
   return (
-    <div className="max-w-[1200px] mx-auto px-4 py-8">
+    <div className="max-w-[900px] mx-auto px-4 py-8">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
-        <h1 className="text-2xl font-bold">Team Overview</h1>
+        <div>
+          <h1 className="text-2xl font-bold">Team Overview</h1>
+          {teamCount > 0 && (
+            <p className="text-sm text-muted-foreground mt-1">
+              {teamCount} {teamCount === 1 ? "person" : "people"} submitted this week
+            </p>
+          )}
+        </div>
         <WeekSelector currentWeek={currentWeek} onWeekChange={setCurrentWeek} />
       </div>
 
       {loading ? (
-        <div className="space-y-6">
-          {Array.from({ length: 3 }).map((_, i) => (
+        <div className="space-y-4">
+          {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="bg-card border rounded-xl p-5 space-y-3">
               <Skeleton className="h-5 w-48" />
               <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="h-4 w-2/3" />
             </div>
           ))}
         </div>
-      ) : sections.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-12 text-center">
-          No updates submitted for this week yet.
-        </p>
+      ) : teamCount === 0 ? (
+        <div className="text-center py-16">
+          <p className="text-muted-foreground">No updates submitted for this week yet.</p>
+        </div>
+      ) : generating ? (
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">Analyzing team updates...</p>
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="bg-card border rounded-xl p-5 space-y-3">
+              <Skeleton className="h-5 w-48" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-2/3" />
+            </div>
+          ))}
+        </div>
+      ) : themes.length === 0 ? (
+        <div className="text-center py-16">
+          <p className="text-muted-foreground">Could not extract themes. Try refreshing.</p>
+        </div>
       ) : (
-        <div className="space-y-6">
-          {sections.map((section) => {
-            const isExpanded = expandedSections.has(section.type);
-            const personCount = section.byPerson.length;
-
-            return (
-              <div key={section.type} className="bg-card border rounded-xl overflow-hidden">
-                {/* Section header */}
-                <div className={`border-l-4 ${section.borderColor} px-5 pt-5 pb-4`}>
-                  <h2 className="text-base font-semibold flex items-center gap-2">
-                    <span>{section.emoji}</span>
-                    {section.title}
-                    <span className="text-xs font-normal text-muted-foreground ml-1">
-                      ({personCount} {personCount === 1 ? "person" : "people"})
-                    </span>
-                  </h2>
-
-                  {/* AI Summary */}
-                  <div className="mt-3">
-                    {section.loading ? (
-                      <div className="space-y-2">
-                        <Skeleton className="h-4 w-full" />
-                        <Skeleton className="h-4 w-3/4" />
-                      </div>
-                    ) : section.summary ? (
-                      <p className="text-sm leading-relaxed text-foreground/90">
-                        {section.summary}
-                      </p>
-                    ) : (
-                      <p className="text-sm text-muted-foreground italic">
-                        Summary unavailable
-                      </p>
-                    )}
+        <div className="space-y-4">
+          {/* Regular themes first, blockers last */}
+          {[...themes.filter((t) => !t.isBlocker), ...themes.filter((t) => t.isBlocker)].map(
+            (theme, i) => (
+              <div
+                key={i}
+                className={`border rounded-xl p-5 ${
+                  theme.isBlocker
+                    ? "bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-900"
+                    : "bg-card border-border"
+                }`}
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-base flex items-center gap-2">
+                      {theme.isBlocker ? (
+                        <span className="text-red-600">⚠️</span>
+                      ) : (
+                        <span className="text-primary">●</span>
+                      )}
+                      {theme.title}
+                    </h3>
+                    <p className="text-sm text-foreground/80 mt-2 leading-relaxed">
+                      {theme.summary}
+                    </p>
                   </div>
-
-                  {/* Show details toggle */}
-                  <button
-                    onClick={() => toggleSection(section.type)}
-                    className="mt-3 text-xs font-medium text-primary hover:text-primary/80 flex items-center gap-1 transition-colors"
-                  >
-                    <svg
-                      className={`w-3.5 h-3.5 transition-transform ${isExpanded ? "rotate-90" : ""}`}
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                    </svg>
-                    {isExpanded ? "Hide details" : `Show details (${section.allItems.length} items)`}
-                  </button>
                 </div>
 
-                {/* Expandable per-person details */}
-                {isExpanded && (
-                  <div className="border-t bg-background/50 px-5 py-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {section.byPerson.map((person) => (
-                        <div
-                          key={person.name}
-                          className="flex gap-3"
-                        >
-                          <div className="w-7 h-7 rounded-full bg-accent text-accent-foreground flex items-center justify-center text-[10px] font-semibold shrink-0 mt-0.5">
-                            {getInitials(person.name)}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium">{person.name}</p>
-                            <ul className="mt-1 space-y-0.5">
-                              {person.items.map((item, i) => (
-                                <li key={i} className="text-xs text-muted-foreground leading-relaxed">
-                                  {item}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                {/* People pills */}
+                <div className="flex flex-wrap gap-2 mt-3">
+                  {theme.people.map((name) => (
+                    <span
+                      key={name}
+                      className="inline-flex items-center gap-1.5 text-xs bg-background border rounded-full px-2.5 py-1"
+                    >
+                      <span className="w-4 h-4 rounded-full bg-accent text-accent-foreground flex items-center justify-center text-[8px] font-semibold">
+                        {getInitials(name)}
+                      </span>
+                      {name}
+                    </span>
+                  ))}
+                </div>
               </div>
-            );
-          })}
+            )
+          )}
         </div>
       )}
     </div>
