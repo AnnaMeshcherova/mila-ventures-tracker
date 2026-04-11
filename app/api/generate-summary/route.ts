@@ -32,28 +32,44 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
+  // Normalize terminology before sending to LLM
+  // This ensures synonyms get merged into the same theme
+  const synonyms: [RegExp, string][] = [
+    [/\bVSB\b/gi, "VSB/Bootcamp"],
+    [/\bbootcamp\b/gi, "VSB/Bootcamp"],
+    [/\bVenture Studio Bootcamp\b/gi, "VSB/Bootcamp"],
+  ];
+
+  function normalize(text: string): string {
+    let result = text;
+    for (const [pattern, replacement] of synonyms) {
+      result = result.replace(pattern, replacement);
+    }
+    return result;
+  }
+
   // Build a combined view of all data for the LLM
   const lines: string[] = [];
 
   if (data.achievements.length > 0) {
     lines.push("DONE THIS WEEK:");
-    data.achievements.forEach((item) => lines.push(`  - ${item.name}: ${item.text.slice(0, 150)}`));
+    data.achievements.forEach((item) => lines.push(`  - ${item.name}: ${normalize(item.text.slice(0, 150))}`));
   }
   if (data.focus.length > 0) {
     lines.push("FOCUS NEXT WEEK:");
-    data.focus.forEach((item) => lines.push(`  - ${item.name}: ${item.text.slice(0, 150)}`));
+    data.focus.forEach((item) => lines.push(`  - ${item.name}: ${normalize(item.text.slice(0, 150))}`));
   }
   if (data.blockers.length > 0) {
     lines.push("BLOCKERS:");
-    data.blockers.forEach((item) => lines.push(`  - ${item.name}: ${item.text.slice(0, 150)}`));
+    data.blockers.forEach((item) => lines.push(`  - ${item.name}: ${normalize(item.text.slice(0, 150))}`));
   }
   if (data.announcements.length > 0) {
     lines.push("ANNOUNCEMENTS:");
-    data.announcements.forEach((item) => lines.push(`  - ${item.name}: ${item.text.slice(0, 150)}`));
+    data.announcements.forEach((item) => lines.push(`  - ${item.name}: ${normalize(item.text.slice(0, 150))}`));
   }
   if (data.commitments.length > 0) {
     lines.push("COMMITTED TO GET DONE:");
-    data.commitments.forEach((item) => lines.push(`  - ${item.name}: ${item.text.slice(0, 150)}`));
+    data.commitments.forEach((item) => lines.push(`  - ${item.name}: ${normalize(item.text.slice(0, 150))}`));
   }
 
   const allData = lines.join("\n");
