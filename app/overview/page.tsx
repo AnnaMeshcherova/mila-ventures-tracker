@@ -26,11 +26,18 @@ interface UpdateWithProfile extends WeeklyUpdate {
   full_name: string;
 }
 
+interface PersonItems {
+  name: string;
+  items: string[];
+}
+
 interface SectionData {
   type: string;
   title: string;
   borderColor: string;
-  items: { name: string; text: string }[];
+  emoji: string;
+  allItems: { name: string; text: string }[];
+  byPerson: PersonItems[];
   summary: string | null;
   loading: boolean;
 }
@@ -42,6 +49,17 @@ function getInitials(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
+/** Group flat items into per-person buckets */
+function groupByPerson(items: { name: string; text: string }[]): PersonItems[] {
+  const map = new Map<string, string[]>();
+  for (const item of items) {
+    const existing = map.get(item.name) ?? [];
+    existing.push(item.text);
+    map.set(item.name, existing);
+  }
+  return Array.from(map.entries()).map(([name, items]) => ({ name, items }));
+}
+
 export default function OverviewPage() {
   const router = useRouter();
   const supabase = createClient();
@@ -49,6 +67,16 @@ export default function OverviewPage() {
   const [currentWeek, setCurrentWeek] = useState(getThisMonday());
   const [sections, setSections] = useState<SectionData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
+
+  function toggleSection(type: string) {
+    setExpandedSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(type)) next.delete(type);
+      else next.add(type);
+      return next;
+    });
+  }
 
   useEffect(() => {
     async function checkAuth() {
@@ -61,6 +89,7 @@ export default function OverviewPage() {
   useEffect(() => {
     async function fetchData() {
       setLoading(true);
+      setExpandedSections(new Set());
 
       const prevWeekDate = new Date(currentWeek + "T00:00:00");
       prevWeekDate.setDate(prevWeekDate.getDate() - 7);
@@ -71,9 +100,7 @@ export default function OverviewPage() {
           supabase.from("profiles").select("id, full_name"),
           supabase
             .from("weekly_updates")
-            .select(
-              "user_id, planned_tasks, blockers, achievements, announcements, commitment, updated_at"
-            )
+            .select("user_id, planned_tasks, blockers, achievements, announcements, commitment, updated_at")
             .eq("week_start", currentWeek)
             .eq("is_draft", false),
           supabase
@@ -91,17 +118,15 @@ export default function OverviewPage() {
         (profilesRes.data ?? []).map((p: any) => [p.id, p.full_name])
       );
 
-      const updates: UpdateWithProfile[] = (updatesRes.data ?? []).map(
-        (u: any) => ({
-          ...u,
-          planned_tasks: u.planned_tasks ?? [],
-          blockers: u.blockers ?? [],
-          achievements: u.achievements ?? [],
-          announcements: u.announcements ?? [],
-          commitment: u.commitment ?? null,
-          full_name: profileMap.get(u.user_id) ?? "Unknown",
-        })
-      );
+      const updates: UpdateWithProfile[] = (updatesRes.data ?? []).map((u: any) => ({
+        ...u,
+        planned_tasks: u.planned_tasks ?? [],
+        blockers: u.blockers ?? [],
+        achievements: u.achievements ?? [],
+        announcements: u.announcements ?? [],
+        commitment: u.commitment ?? null,
+        full_name: profileMap.get(u.user_id) ?? "Unknown",
+      }));
 
       const prevUpdates = (prevUpdatesRes.data ?? []).map((u: any) => ({
         ...u,
@@ -109,7 +134,6 @@ export default function OverviewPage() {
         full_name: profileMap.get(u.user_id) ?? "Unknown",
       }));
 
-      // Build cached summaries map
       const cachedSummaries = new Map(
         (summariesRes.data ?? []).map((s: any) => [
           s.section_type,
@@ -117,11 +141,8 @@ export default function OverviewPage() {
         ])
       );
 
-      // Find the latest update timestamp to compare against cache
       const latestUpdateTime = Math.max(
-        ...(updatesRes.data ?? []).map((u: any) =>
-          new Date(u.updated_at).getTime()
-        ),
+        ...(updatesRes.data ?? []).map((u: any) => new Date(u.updated_at).getTime()),
         0
       );
 
@@ -133,19 +154,14 @@ export default function OverviewPage() {
         if (u.commitment?.trim()) {
           const exists = tasks.some((t) => t.text === u.commitment);
           if (!exists) {
-            tasks.unshift({
-              name: u.full_name,
-              text: `[To get done] ${u.commitment}`,
-            });
+            tasks.unshift({ name: u.full_name, text: u.commitment! });
           }
         }
         return tasks;
       });
 
       const blockerItems = updates.flatMap((u) =>
-        (u.blockers ?? [])
-          .filter((b) => b.trim())
-          .map((b) => ({ name: u.full_name, text: b }))
+        (u.blockers ?? []).filter((b) => b.trim()).map((b) => ({ name: u.full_name, text: b }))
       );
 
       const commitmentItems = prevUpdates
@@ -153,63 +169,33 @@ export default function OverviewPage() {
         .map((u: any) => ({ name: u.full_name, text: u.commitment }));
 
       const achievementItems = updates.flatMap((u) =>
-        (u.achievements ?? [])
-          .filter((a) => a.trim())
-          .map((a) => ({ name: u.full_name, text: a }))
+        (u.achievements ?? []).filter((a) => a.trim()).map((a) => ({ name: u.full_name, text: a }))
       );
 
       const announcementItems = updates.flatMap((u) =>
-        (u.announcements ?? [])
-          .filter((a) => a.trim())
-          .map((a) => ({ name: u.full_name, text: a }))
+        (u.announcements ?? []).filter((a) => a.trim()).map((a) => ({ name: u.full_name, text: a }))
       );
 
-      // Build sections with cache status
       const sectionDefs = [
-        {
-          type: "focus",
-          title: "This Week's Focus",
-          borderColor: "border-amber-400",
-          items: focusItems,
-        },
-        {
-          type: "blockers",
-          title: "Blockers & Help Needed",
-          borderColor: "border-red-500",
-          items: blockerItems,
-        },
-        {
-          type: "commitments",
-          title: "Last Week's To Get Done",
-          borderColor: "border-blue-400",
-          items: commitmentItems,
-        },
-        {
-          type: "achievements",
-          title: "What Got Done Last Week",
-          borderColor: "border-green-500",
-          items: achievementItems,
-        },
-        {
-          type: "announcements",
-          title: "Announcements",
-          borderColor: "border-border",
-          items: announcementItems,
-        },
+        { type: "focus", title: "Focus Next Week", borderColor: "border-amber-400", emoji: "🎯", items: focusItems },
+        { type: "blockers", title: "Blockers & Help Needed", borderColor: "border-red-500", emoji: "🚧", items: blockerItems },
+        { type: "commitments", title: "Committed To Get Done", borderColor: "border-blue-400", emoji: "🔒", items: commitmentItems },
+        { type: "achievements", title: "Done This Week", borderColor: "border-green-500", emoji: "✅", items: achievementItems },
+        { type: "announcements", title: "Announcements", borderColor: "border-border", emoji: "📢", items: announcementItems },
       ];
 
       const builtSections: SectionData[] = sectionDefs
         .filter((s) => s.items.length > 0)
         .map((s) => {
           const cached = cachedSummaries.get(s.type);
-          const isFresh =
-            cached &&
-            new Date(cached.generated_at).getTime() >= latestUpdateTime;
+          const isFresh = cached && new Date(cached.generated_at).getTime() >= latestUpdateTime;
 
           return {
             ...s,
+            allItems: s.items,
+            byPerson: groupByPerson(s.items),
             summary: isFresh ? cached.text : null,
-            loading: !isFresh, // will trigger generation
+            loading: !isFresh,
           };
         });
 
@@ -230,33 +216,24 @@ export default function OverviewPage() {
                 body: JSON.stringify({
                   weekStart: currentWeek,
                   sectionType: section.type,
-                  items: section.items,
+                  items: section.allItems,
                 }),
               });
-
               if (res.ok) {
                 const data = await res.json();
                 setSections((prev) =>
                   prev.map((s) =>
-                    s.type === section.type
-                      ? { ...s, summary: data.summary, loading: false }
-                      : s
+                    s.type === section.type ? { ...s, summary: data.summary, loading: false } : s
                   )
                 );
               } else {
-                const errText = await res.text().catch(() => "unknown");
-                console.error(`Summary generation failed for ${section.type}: ${res.status} ${errText}`);
                 setSections((prev) =>
-                  prev.map((s) =>
-                    s.type === section.type ? { ...s, loading: false } : s
-                  )
+                  prev.map((s) => (s.type === section.type ? { ...s, loading: false } : s))
                 );
               }
             } catch {
               setSections((prev) =>
-                prev.map((s) =>
-                  s.type === section.type ? { ...s, loading: false } : s
-                )
+                prev.map((s) => (s.type === section.type ? { ...s, loading: false } : s))
               );
             }
           })
@@ -270,18 +247,16 @@ export default function OverviewPage() {
     <div className="max-w-[1200px] mx-auto px-4 py-8">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <h1 className="text-2xl font-bold">Team Overview</h1>
-        <WeekSelector
-          currentWeek={currentWeek}
-          onWeekChange={setCurrentWeek}
-        />
+        <WeekSelector currentWeek={currentWeek} onWeekChange={setCurrentWeek} />
       </div>
 
       {loading ? (
-        <div className="space-y-8">
+        <div className="space-y-6">
           {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="space-y-3">
-              <Skeleton className="h-5 w-40" />
-              <Skeleton className="h-16 w-full" />
+            <div key={i} className="bg-card border rounded-xl p-5 space-y-3">
+              <Skeleton className="h-5 w-48" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-3/4" />
             </div>
           ))}
         </div>
@@ -290,43 +265,89 @@ export default function OverviewPage() {
           No updates submitted for this week yet.
         </p>
       ) : (
-        <div className="space-y-8">
-          {sections.map((section) => (
-            <section key={section.type}>
-              <h2
-                className={`text-lg font-semibold mb-4 border-l-4 ${section.borderColor} pl-3`}
-              >
-                {section.title}
-              </h2>
+        <div className="space-y-6">
+          {sections.map((section) => {
+            const isExpanded = expandedSections.has(section.type);
+            const personCount = section.byPerson.length;
 
-              {section.loading ? (
-                <div className="space-y-2">
-                  <Skeleton className="h-4 w-full" />
-                  <Skeleton className="h-4 w-3/4" />
-                  <Skeleton className="h-4 w-1/2" />
-                </div>
-              ) : section.summary ? (
-                <p className="text-sm leading-relaxed text-foreground bg-card border rounded-lg p-4">
-                  {section.summary}
-                </p>
-              ) : (
-                // Fallback: bullet points if LLM summary failed
-                <div className="space-y-2">
-                  {section.items.map((item, i) => (
-                    <div key={i} className="flex items-start gap-2">
-                      <div className="w-6 h-6 rounded-full bg-accent text-accent-foreground flex items-center justify-center text-[10px] font-semibold shrink-0 mt-0.5">
-                        {getInitials(item.name)}
+            return (
+              <div key={section.type} className="bg-card border rounded-xl overflow-hidden">
+                {/* Section header */}
+                <div className={`border-l-4 ${section.borderColor} px-5 pt-5 pb-4`}>
+                  <h2 className="text-base font-semibold flex items-center gap-2">
+                    <span>{section.emoji}</span>
+                    {section.title}
+                    <span className="text-xs font-normal text-muted-foreground ml-1">
+                      ({personCount} {personCount === 1 ? "person" : "people"})
+                    </span>
+                  </h2>
+
+                  {/* AI Summary */}
+                  <div className="mt-3">
+                    {section.loading ? (
+                      <div className="space-y-2">
+                        <Skeleton className="h-4 w-full" />
+                        <Skeleton className="h-4 w-3/4" />
                       </div>
-                      <span className="font-medium text-sm shrink-0">
-                        {item.name}
-                      </span>
-                      <span className="text-sm">{item.text}</span>
-                    </div>
-                  ))}
+                    ) : section.summary ? (
+                      <p className="text-sm leading-relaxed text-foreground/90">
+                        {section.summary}
+                      </p>
+                    ) : (
+                      <p className="text-sm text-muted-foreground italic">
+                        Summary unavailable
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Show details toggle */}
+                  <button
+                    onClick={() => toggleSection(section.type)}
+                    className="mt-3 text-xs font-medium text-primary hover:text-primary/80 flex items-center gap-1 transition-colors"
+                  >
+                    <svg
+                      className={`w-3.5 h-3.5 transition-transform ${isExpanded ? "rotate-90" : ""}`}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                    </svg>
+                    {isExpanded ? "Hide details" : `Show details (${section.allItems.length} items)`}
+                  </button>
                 </div>
-              )}
-            </section>
-          ))}
+
+                {/* Expandable per-person details */}
+                {isExpanded && (
+                  <div className="border-t bg-background/50 px-5 py-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {section.byPerson.map((person) => (
+                        <div
+                          key={person.name}
+                          className="flex gap-3"
+                        >
+                          <div className="w-7 h-7 rounded-full bg-accent text-accent-foreground flex items-center justify-center text-[10px] font-semibold shrink-0 mt-0.5">
+                            {getInitials(person.name)}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium">{person.name}</p>
+                            <ul className="mt-1 space-y-0.5">
+                              {person.items.map((item, i) => (
+                                <li key={i} className="text-xs text-muted-foreground leading-relaxed">
+                                  {item}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
