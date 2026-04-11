@@ -75,18 +75,26 @@ export default function DashboardPage() {
       prevWeekDate.setDate(prevWeekDate.getDate() - 7);
       const prevWeek = prevWeekDate.toISOString().split("T")[0];
 
+      // Use a range query to handle Monday→Friday transition
+      const weekEnd = new Date(currentWeek + "T00:00:00");
+      weekEnd.setDate(weekEnd.getDate() + 6);
+      const weekEndStr = weekEnd.toISOString().split("T")[0];
+
       const [profilesRes, updatesRes, prevUpdatesRes, activityRes] = await Promise.all([
         supabase.from("profiles").select("id, full_name, role"),
         supabase
           .from("weekly_updates")
           .select("user_id, planned_tasks, blockers, achievements, commitment, announcements, updated_at, is_draft")
-          .eq("week_start", currentWeek)
+          .gte("week_start", prevWeek)
+          .lte("week_start", weekEndStr)
           .eq("is_draft", false),
         supabase
           .from("weekly_updates")
           .select("user_id, planned_tasks, blockers, achievements, commitment, announcements, updated_at, is_draft")
-          .eq("week_start", prevWeek)
-          .eq("is_draft", false),
+          .lt("week_start", prevWeek)
+          .eq("is_draft", false)
+          .order("week_start", { ascending: false })
+          .limit(15),
         supabase
           .from("weekly_updates")
           .select("user_id, updated_at, profiles(full_name)")

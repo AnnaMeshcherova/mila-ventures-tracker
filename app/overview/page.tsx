@@ -48,17 +48,27 @@ export default function OverviewPage() {
       prevWeekDate.setDate(prevWeekDate.getDate() - 7);
       const prevWeek = prevWeekDate.toISOString().split("T")[0];
 
+      // Fetch updates within a 7-day window from the current week start
+      // This handles the Monday→Friday transition: updates from both 2026-04-06 (old Monday)
+      // and 2026-04-10 (new Friday) will be included in the same week view
+      const weekEnd = new Date(currentWeek + "T00:00:00");
+      weekEnd.setDate(weekEnd.getDate() + 6);
+      const weekEndStr = weekEnd.toISOString().split("T")[0];
+
       const [updatesRes, prevUpdatesRes, cachedRes] = await Promise.all([
         supabase
           .from("weekly_updates")
           .select("user_id, planned_tasks, blockers, achievements, announcements, commitment, updated_at, profiles(full_name)")
-          .eq("week_start", currentWeek)
+          .gte("week_start", prevWeek)
+          .lte("week_start", weekEndStr)
           .eq("is_draft", false),
         supabase
           .from("weekly_updates")
           .select("user_id, commitment, profiles(full_name)")
-          .eq("week_start", prevWeek)
-          .eq("is_draft", false),
+          .lt("week_start", prevWeek)
+          .eq("is_draft", false)
+          .order("week_start", { ascending: false })
+          .limit(15),
         supabase
           .from("weekly_summaries")
           .select("summary_text, generated_at")
