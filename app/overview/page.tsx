@@ -55,16 +55,17 @@ export default function OverviewPage() {
       weekEnd.setDate(weekEnd.getDate() + 6);
       const weekEndStr = weekEnd.toISOString().split("T")[0];
 
-      const [updatesRes, prevUpdatesRes, cachedRes] = await Promise.all([
+      const [profilesRes, updatesRes, prevUpdatesRes, cachedRes] = await Promise.all([
+        supabase.from("profiles").select("id, full_name"),
         supabase
           .from("weekly_updates")
-          .select("user_id, planned_tasks, blockers, achievements, announcements, commitment, updated_at, profiles(full_name)")
+          .select("user_id, planned_tasks, blockers, achievements, announcements, commitment, updated_at")
           .gte("week_start", prevWeek)
           .lte("week_start", weekEndStr)
           .eq("is_draft", false),
         supabase
           .from("weekly_updates")
-          .select("user_id, commitment, profiles(full_name)")
+          .select("user_id, commitment")
           .lt("week_start", prevWeek)
           .eq("is_draft", false)
           .order("week_start", { ascending: false })
@@ -76,6 +77,9 @@ export default function OverviewPage() {
           .eq("section_type", "themes")
           .maybeSingle(),
       ]);
+
+      if (updatesRes.error) console.error("Updates fetch error:", updatesRes.error);
+      if (profilesRes.error) console.error("Profiles fetch error:", profilesRes.error);
 
       const updates = updatesRes.data ?? [];
       const prevUpdates = prevUpdatesRes.data ?? [];
@@ -106,8 +110,11 @@ export default function OverviewPage() {
         }
       }
 
-      // Build data for LLM
-      const getName = (u: any) => (u.profiles as any)?.full_name ?? "Unknown";
+      // Build profiles lookup map
+      const profileMap = new Map(
+        (profilesRes.data ?? []).map((p: any) => [p.id, p.full_name])
+      );
+      const getName = (u: any) => profileMap.get(u.user_id) ?? "Unknown";
 
       const focusItems = updates.flatMap((u: any) =>
         (u.planned_tasks ?? []).filter((t: string) => t.trim()).map((t: string) => ({ name: getName(u), text: t }))
