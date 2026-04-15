@@ -231,7 +231,7 @@ export default function HistoryPage() {
               {update.announcements?.filter((a) => a.trim()).length ? (
                 <div>
                   <p className="text-xs uppercase font-semibold text-muted-foreground mb-1">
-                    Announcements
+                    Comms Story
                   </p>
                   <ul className="list-disc list-inside text-sm space-y-0.5">
                     {update.announcements

@@ -251,7 +251,7 @@ export default function UpdateForm({
         {currentUpdate.announcements?.length > 0 && (
           <div className="space-y-3">
             <p className="text-sm font-semibold text-foreground">
-              Announcements
+              Comms Story
             </p>
             <ul className="list-disc pl-5 space-y-1 text-sm text-foreground">
               {currentUpdate.announcements.map((item: string, i: number) => (
@@ -365,12 +365,12 @@ export default function UpdateForm({
       {/* Announcements */}
       <div className="space-y-3">
         <label className="text-sm font-semibold text-foreground">
-          Anything the whole team should know?{" "}
+          Share one story you'd like the comms team to highlight{" "}
           <span className="font-normal text-muted-foreground">(optional)</span>
         </label>
         <MentionInput
           value={announcements}
-          placeholder="Team announcements, shoutouts, etc."
+          placeholder="A win, milestone, or story worth sharing..."
           profiles={profiles}
           fieldType="announcement"
           fieldIndex={0}

@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
     data.blockers.forEach((item) => lines.push(`  - ${item.name}: ${normalize(item.text.slice(0, 150))}`));
   }
   if (data.announcements.length > 0) {
-    lines.push("ANNOUNCEMENTS:");
+    lines.push("COMMS STORIES (stories for the communications team to highlight):");
     data.announcements.forEach((item) => lines.push(`  - ${item.name}: ${normalize(item.text.slice(0, 150))}`));
   }
   if (data.commitments.length > 0) {
