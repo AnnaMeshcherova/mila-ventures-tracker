@@ -104,7 +104,7 @@ export default function WeeklyUpdateCard({
           {hasAnnouncements && (
             <div className="mb-4">
               <p className="text-xs uppercase font-semibold text-muted-foreground tracking-wide mb-2">
-                Comms Story
+                Story for comms
               </p>
               <BulletList items={update!.announcements!} dotClass="bg-muted-foreground/40" />
             </div>

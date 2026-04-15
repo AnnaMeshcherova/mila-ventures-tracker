@@ -251,7 +251,7 @@ export default function UpdateForm({
         {currentUpdate.announcements?.length > 0 && (
           <div className="space-y-3">
             <p className="text-sm font-semibold text-foreground">
-              Comms Story
+              Story for comms
             </p>
             <ul className="list-disc pl-5 space-y-1 text-sm text-foreground">
               {currentUpdate.announcements.map((item: string, i: number) => (
