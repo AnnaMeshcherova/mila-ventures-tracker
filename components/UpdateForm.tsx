@@ -141,6 +141,7 @@ export default function UpdateForm({
     const validationError = validate();
     if (validationError) {
       toast.error(validationError);
+      isSubmittingRef.current = false;
       return;
     }
 
@@ -179,6 +180,7 @@ export default function UpdateForm({
               .eq("id", update.id);
             toast.error("Failed to save mentions. Your update was saved as a draft.");
             setSubmitting(false);
+            isSubmittingRef.current = false;
             return;
           }
         }
@@ -189,6 +191,7 @@ export default function UpdateForm({
     } catch {
       toast.error("Failed to submit update");
       setSubmitting(false);
+      isSubmittingRef.current = false;
     }
   }
 
@@ -383,7 +386,15 @@ export default function UpdateForm({
       </div>
 
       <div className="flex gap-3">
-        <Button type="submit" disabled={submitting}>
+        <Button
+          type="submit"
+          disabled={submitting}
+          onMouseDown={() => {
+            // Set ref BEFORE blur fires on the focused input, so the
+            // auto-save draft handler bails out instead of racing the submit.
+            isSubmittingRef.current = true;
+          }}
+        >
           {submitting ? "Submitting..." : "Submit Update"}
         </Button>
         <Button type="button" variant="secondary" onClick={handleSaveDraft}>

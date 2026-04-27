@@ -1,19 +1,21 @@
 /**
  * Date utilities for weekly update tracking.
- * Weeks start on FRIDAY. "This week" = most recent Friday through next Thursday.
+ * Weeks END on FRIDAY. "This week" = the upcoming Friday (or today if today is Friday).
+ * The week_start column is misnamed for historical reasons — it actually stores
+ * the week-ending Friday date.
  * All functions compute dates client-side using the user's local timezone
  * to avoid UTC date boundary issues on Vercel.
  */
 
-/** Returns ISO date (YYYY-MM-DD) of the most recent Friday, or today if today is Friday. */
+/** Returns ISO date (YYYY-MM-DD) of the upcoming Friday, or today if today is Friday. */
 export function getThisFriday(date: Date = new Date()): string {
   const d = new Date(date);
   const day = d.getDay();
   // day: 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat
-  // Days since last Friday:
-  // Fri(5)=0, Sat(6)=1, Sun(0)=2, Mon(1)=3, Tue(2)=4, Wed(3)=5, Thu(4)=6
-  const diff = (day - 5 + 7) % 7;
-  d.setDate(d.getDate() - diff);
+  // Days until next Friday (or 0 if today is Friday):
+  // Fri(5)=0, Sat(6)=6, Sun(0)=5, Mon(1)=4, Tue(2)=3, Wed(3)=2, Thu(4)=1
+  const diff = (5 - day + 7) % 7;
+  d.setDate(d.getDate() + diff);
   return formatDate(d);
 }
 
