@@ -1,32 +1,60 @@
 /**
  * Date utilities for weekly update tracking.
- * Weeks END on FRIDAY. "This week" = the upcoming Friday (or today if today is Friday).
- * The week_start column is misnamed for historical reasons — it actually stores
- * the week-ending Friday date.
- * All functions compute dates client-side using the user's local timezone
- * to avoid UTC date boundary issues on Vercel.
+ *
+ * The team standup is every **Monday at 1pm**. Each row in `weekly_updates`
+ * is bucketed by the Monday-standup date it belongs to. The submission window
+ * for a given standup is Friday → Monday 1pm. So:
+ *   - Friday/Saturday/Sunday/Monday-before-1pm → bucket = upcoming Monday
+ *   - Monday-after-1pm/Tuesday/Wednesday/Thursday → bucket = NEXT Monday
+ *
+ * The column is still named `week_start` historically, but the value is now
+ * always the Monday of the standup that update is for.
+ *
+ * Dates compute client-side using the user's local timezone to avoid UTC
+ * boundary issues on Vercel.
  */
 
-/** Returns ISO date (YYYY-MM-DD) of the upcoming Friday, or today if today is Friday. */
-export function getThisFriday(date: Date = new Date()): string {
+const STANDUP_HOUR = 13; // 1pm
+
+/**
+ * Returns ISO date (YYYY-MM-DD) of the Monday standup this submission is for.
+ * - If today is Monday before 1pm: today.
+ * - If today is Monday at/after 1pm: next Monday.
+ * - Otherwise: upcoming Monday.
+ */
+export function getStandupMonday(date: Date = new Date()): string {
   const d = new Date(date);
-  const day = d.getDay();
-  // day: 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat
-  // Days until next Friday (or 0 if today is Friday):
-  // Fri(5)=0, Sat(6)=6, Sun(0)=5, Mon(1)=4, Tue(2)=3, Wed(3)=2, Thu(4)=1
-  const diff = (5 - day + 7) % 7;
+  const day = d.getDay(); // 0=Sun..6=Sat
+  const hours = d.getHours();
+
+  let diff: number;
+  if (day === 1) {
+    // Monday: today's standup if before 1pm, else next week's
+    diff = hours < STANDUP_HOUR ? 0 : 7;
+  } else {
+    // Days until next Monday
+    diff = (1 - day + 7) % 7;
+  }
+
   d.setDate(d.getDate() + diff);
   return formatDate(d);
 }
 
-/** Returns ISO date of the Friday before getThisFriday(). */
-export function getPreviousFriday(date: Date = new Date()): string {
-  const thisFriday = new Date(getThisFriday(date) + "T00:00:00");
-  thisFriday.setDate(thisFriday.getDate() - 7);
-  return formatDate(thisFriday);
+/** Returns ISO date of the Monday standup before getStandupMonday(). */
+export function getPreviousStandupMonday(date: Date = new Date()): string {
+  const thisMonday = new Date(getStandupMonday(date) + "T00:00:00");
+  thisMonday.setDate(thisMonday.getDate() - 7);
+  return formatDate(thisMonday);
 }
 
-/** Returns human-readable label like "Week of Apr 11, 2026" */
+/** Returns the standup Monday N weeks offset from the current standup Monday. */
+export function getWeekStart(weekOffset: number, fromDate: Date = new Date()): string {
+  const monday = new Date(getStandupMonday(fromDate) + "T00:00:00");
+  monday.setDate(monday.getDate() + weekOffset * 7);
+  return formatDate(monday);
+}
+
+/** Returns human-readable label like "Week of May 11, 2026" */
 export function formatWeekLabel(weekStartDate: string): string {
   const d = new Date(weekStartDate + "T00:00:00");
   const month = d.toLocaleDateString("en-US", { month: "short" });
@@ -58,14 +86,10 @@ export function timeAgo(dateString: string): string {
   return `${days} day${days > 1 ? "s" : ""} ago`;
 }
 
-/** Returns the Friday N weeks offset from the current week's Friday. */
-export function getWeekStart(weekOffset: number, fromDate: Date = new Date()): string {
-  const friday = new Date(getThisFriday(fromDate) + "T00:00:00");
-  friday.setDate(friday.getDate() + weekOffset * 7);
-  return formatDate(friday);
-}
-
-// Legacy aliases — keep for any code that still references the old names
-export const getThisMonday = getThisFriday;
-export const getPreviousMonday = getPreviousFriday;
+// Aliases — code throughout the project still imports these names.
+// All point at the new Monday-standup logic.
+export const getThisMonday = getStandupMonday;
+export const getThisFriday = getStandupMonday;
+export const getPreviousMonday = getPreviousStandupMonday;
+export const getPreviousFriday = getPreviousStandupMonday;
 export const getMonday = getWeekStart;
