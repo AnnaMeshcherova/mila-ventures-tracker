@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
-import { getThisMonday, getPreviousMonday, timeAgo } from "@/lib/dates";
+import { getThisMonday, timeAgo } from "@/lib/dates";
 import WeekSelector from "@/components/WeekSelector";
 import SearchBar from "@/components/SearchBar";
 import WeeklyUpdateCard from "@/components/WeeklyUpdateCard";
@@ -70,28 +70,17 @@ export default function DashboardPage() {
     async function fetchData() {
       setLoading(true);
 
-      // Compute previous week relative to the currently viewed week
-      const prevWeekDate = new Date(currentWeek + "T00:00:00");
-      prevWeekDate.setDate(prevWeekDate.getDate() - 7);
-      const prevWeek = prevWeekDate.toISOString().split("T")[0];
-
-      // Use a range query to handle Monday→Friday transition
-      const weekEnd = new Date(currentWeek + "T00:00:00");
-      weekEnd.setDate(weekEnd.getDate() + 6);
-      const weekEndStr = weekEnd.toISOString().split("T")[0];
-
       const [profilesRes, updatesRes, prevUpdatesRes, activityRes] = await Promise.all([
         supabase.from("profiles").select("id, full_name, role"),
         supabase
           .from("weekly_updates")
           .select("user_id, planned_tasks, blockers, achievements, commitment, announcements, updated_at, is_draft")
-          .gte("week_start", prevWeek)
-          .lte("week_start", weekEndStr)
+          .eq("week_start", currentWeek)
           .eq("is_draft", false),
         supabase
           .from("weekly_updates")
           .select("user_id, planned_tasks, blockers, achievements, commitment, announcements, updated_at, is_draft")
-          .lt("week_start", prevWeek)
+          .lt("week_start", currentWeek)
           .eq("is_draft", false)
           .order("week_start", { ascending: false })
           .limit(15),
