@@ -2,7 +2,10 @@
 
 # Mila Ventures Weekly Update Tracker
 
-Internal web app for tracking weekly team updates. Next.js 14 (App Router) + Supabase + Tailwind CSS + shadcn/ui.
+Internal web app for tracking weekly team updates. Next.js 16 (App Router) + Supabase + Tailwind CSS + shadcn/ui.
+
+Note: `params` and `searchParams` are Promises in Next.js 16 and must be awaited.
+The Next.js 14 synchronous signatures will fail the build.
 
 ## Design System
 Always read DESIGN.md before making any visual or UI decisions.
