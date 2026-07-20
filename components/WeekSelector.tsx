@@ -5,6 +5,10 @@ import { formatWeekLabel } from "@/lib/dates";
 interface WeekSelectorProps {
   currentWeek: string;
   onWeekChange: (week: string) => void;
+  /** Earliest selectable week (YYYY-MM-DD). Omit for no lower bound. */
+  minWeek?: string;
+  /** Latest selectable week (YYYY-MM-DD). Omit for no upper bound. */
+  maxWeek?: string;
 }
 
 function addDays(dateStr: string, days: number): string {
@@ -19,12 +23,25 @@ function addDays(dateStr: string, days: number): string {
 export default function WeekSelector({
   currentWeek,
   onWeekChange,
+  minWeek,
+  maxWeek,
 }: WeekSelectorProps) {
+  const prevWeek = addDays(currentWeek, -7);
+  const nextWeek = addDays(currentWeek, 7);
+
+  // YYYY-MM-DD strings compare correctly lexicographically.
+  const prevDisabled = minWeek !== undefined && prevWeek < minWeek;
+  const nextDisabled = maxWeek !== undefined && nextWeek > maxWeek;
+
+  const arrowClass =
+    "w-8 h-8 rounded-md border flex items-center justify-center transition-colors enabled:hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed";
+
   return (
     <div className="flex items-center gap-2">
       <button
-        onClick={() => onWeekChange(addDays(currentWeek, -7))}
-        className="w-8 h-8 rounded-md border flex items-center justify-center hover:bg-accent transition-colors"
+        onClick={() => onWeekChange(prevWeek)}
+        disabled={prevDisabled}
+        className={arrowClass}
         aria-label="Previous week"
       >
         <svg
@@ -45,8 +62,9 @@ export default function WeekSelector({
         {formatWeekLabel(currentWeek)}
       </span>
       <button
-        onClick={() => onWeekChange(addDays(currentWeek, 7))}
-        className="w-8 h-8 rounded-md border flex items-center justify-center hover:bg-accent transition-colors"
+        onClick={() => onWeekChange(nextWeek)}
+        disabled={nextDisabled}
+        className={arrowClass}
         aria-label="Next week"
       >
         <svg
