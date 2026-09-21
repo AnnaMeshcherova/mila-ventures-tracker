@@ -6,15 +6,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase";
 import { formatWeekLabel } from "@/lib/dates";
 import { Skeleton } from "@/components/ui/skeleton";
-
-function getInitials(name: string): string {
-  return name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
-}
+import { getInitials } from "@/lib/utils";
 
 interface Profile {
   id: string;

@@ -6,19 +6,13 @@ import { createClient } from "@/lib/supabase";
 import { getThisMonday } from "@/lib/dates";
 import WeekSelector from "@/components/WeekSelector";
 import { Skeleton } from "@/components/ui/skeleton";
+import { getInitials } from "@/lib/utils";
 
 interface Theme {
   title: string;
   summary: string;
   people: string[];
   isBlocker: boolean;
-}
-
-function getInitials(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 0) return "";
-  if (parts.length === 1) return parts[0][0]?.toUpperCase() ?? "";
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 export default function OverviewPage() {

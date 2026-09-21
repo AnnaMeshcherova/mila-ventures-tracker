@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 import { getThisMonday, timeAgo } from "@/lib/dates";
 import WeekSelector from "@/components/WeekSelector";
 import SearchBar from "@/components/SearchBar";
 import WeeklyUpdateCard from "@/components/WeeklyUpdateCard";
+import { type Comment } from "@/components/CommentThread";
 import { Skeleton } from "@/components/ui/skeleton";
+import { getInitials } from "@/lib/utils";
 
 interface Profile {
   id: string;
@@ -16,6 +17,7 @@ interface Profile {
 }
 
 interface WeeklyUpdate {
+  id: string;
   user_id: string;
   planned_tasks: string[];
   blockers: string[];
@@ -26,75 +28,88 @@ interface WeeklyUpdate {
   is_draft: boolean;
 }
 
+/** Shape PostgREST returns for the comments query below. */
+interface CommentRow {
+  id: string;
+  update_id: string;
+  author_user_id: string;
+  body: string;
+  created_at: string;
+  // embedded relation comes back as an object or a single-element array
+  profiles: { full_name: string } | { full_name: string }[] | null;
+}
+
 interface ActivityItem {
   user_id: string;
   full_name: string;
   updated_at: string;
 }
 
-function getInitials(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 0) return "";
-  if (parts.length === 1) return parts[0][0]?.toUpperCase() ?? "";
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
-
 export default function DashboardPage() {
-  const router = useRouter();
   const supabase = createClient();
 
   const [currentWeek, setCurrentWeek] = useState(getThisMonday());
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [updates, setUpdates] = useState<WeeklyUpdate[]>([]);
-  const [prevUpdates, setPrevUpdates] = useState<WeeklyUpdate[]>([]);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [baseLoading, setBaseLoading] = useState(true);
+  const [updatesLoading, setUpdatesLoading] = useState(true);
   const [activityOpen, setActivityOpen] = useState(false);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
-  // Auth check
-  useEffect(() => {
-    async function checkAuth() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        router.push("/auth/login");
+  // Comments for every update shown this week, in one query.
+  const fetchComments = useCallback(
+    async (updateIds: string[]) => {
+      if (updateIds.length === 0) {
+        setComments([]);
+        return;
       }
-    }
-    checkAuth();
-  }, [router, supabase.auth]);
 
-  // Fetch data when week changes
+      const { data } = await supabase
+        .from("comments")
+        .select(
+          "id, update_id, author_user_id, body, created_at, profiles(full_name)"
+        )
+        .in("update_id", updateIds)
+        .order("created_at", { ascending: true });
+
+      const rows = (data ?? []) as unknown as CommentRow[];
+
+      setComments(
+        rows.map((c) => ({
+          id: c.id,
+          update_id: c.update_id,
+          author_user_id: c.author_user_id,
+          body: c.body,
+          created_at: c.created_at,
+          author_name:
+            (Array.isArray(c.profiles) ? c.profiles[0] : c.profiles)
+              ?.full_name ?? "Unknown",
+        }))
+      );
+    },
+    [supabase]
+  );
+
+  // Roster and activity feed are week-independent — fetch once on mount.
+  // (Auth is enforced by middleware before this page ever renders.)
   useEffect(() => {
-    async function fetchData() {
-      setLoading(true);
-
-      const [profilesRes, updatesRes, prevUpdatesRes, activityRes] = await Promise.all([
+    async function fetchBase() {
+      const [profilesRes, activityRes, userRes] = await Promise.all([
         supabase.from("profiles").select("id, full_name, role"),
-        supabase
-          .from("weekly_updates")
-          .select("user_id, planned_tasks, blockers, achievements, commitment, announcements, updated_at, is_draft")
-          .eq("week_start", currentWeek)
-          .eq("is_draft", false),
-        supabase
-          .from("weekly_updates")
-          .select("user_id, planned_tasks, blockers, achievements, commitment, announcements, updated_at, is_draft")
-          .lt("week_start", currentWeek)
-          .eq("is_draft", false)
-          .order("week_start", { ascending: false })
-          .limit(15),
         supabase
           .from("weekly_updates")
           .select("user_id, updated_at, profiles(full_name)")
           .eq("is_draft", false)
           .order("updated_at", { ascending: false })
           .limit(10),
+        supabase.auth.getUser(),
       ]);
 
       if (profilesRes.data) setProfiles(profilesRes.data);
-      if (updatesRes.data) setUpdates(updatesRes.data);
-      if (prevUpdatesRes.data) setPrevUpdates(prevUpdatesRes.data);
+      setCurrentUserId(userRes.data.user?.id ?? null);
 
       if (activityRes.data) {
         const items: ActivityItem[] = activityRes.data.map((item: any) => ({
@@ -105,18 +120,58 @@ export default function DashboardPage() {
         setActivity(items);
       }
 
-      setLoading(false);
+      setBaseLoading(false);
     }
-    fetchData();
-  }, [currentWeek, supabase]);
+    fetchBase();
+  }, [supabase]);
+
+  // Updates are the only week-dependent query.
+  useEffect(() => {
+    let cancelled = false;
+
+    async function fetchUpdates() {
+      setUpdatesLoading(true);
+
+      const { data } = await supabase
+        .from("weekly_updates")
+        .select("id, user_id, planned_tasks, blockers, achievements, commitment, announcements, updated_at, is_draft")
+        .eq("week_start", currentWeek)
+        .eq("is_draft", false);
+
+      // A slower response for an earlier week must not overwrite a newer one.
+      if (cancelled) return;
+
+      const rows = data ?? [];
+      setUpdates(rows);
+      setUpdatesLoading(false);
+      fetchComments(rows.map((u) => u.id));
+    }
+    fetchUpdates();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentWeek, supabase, fetchComments]);
 
   const handleSearch = useCallback((query: string) => {
     setSearchQuery(query);
   }, []);
 
+  const loading = baseLoading || updatesLoading;
+
+  const handleCommentsChanged = useCallback(() => {
+    fetchComments(updates.map((u) => u.id));
+  }, [fetchComments, updates]);
+
+  const commentsByUpdate = new Map<string, Comment[]>();
+  for (const c of comments) {
+    const list = commentsByUpdate.get(c.update_id);
+    if (list) list.push(c);
+    else commentsByUpdate.set(c.update_id, [c]);
+  }
+
   // Build card data: merge profiles with updates
   const updatesByUser = new Map(updates.map((u) => [u.user_id, u]));
-  const prevUpdatesByUser = new Map(prevUpdates.map((u) => [u.user_id, u]));
 
   const filteredProfiles = profiles.filter((p) =>
     p.full_name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -200,6 +255,14 @@ export default function DashboardPage() {
                   key={profile.id}
                   profile={profile}
                   update={updatesByUser.get(profile.id)}
+                  comments={
+                    commentsByUpdate.get(
+                      updatesByUser.get(profile.id)?.id ?? ""
+                    ) ?? []
+                  }
+                  profiles={profiles}
+                  currentUserId={currentUserId}
+                  onCommentsChanged={handleCommentsChanged}
                 />
               ))}
             </div>
@@ -213,7 +276,7 @@ export default function DashboardPage() {
             <h2 className="text-sm font-semibold mb-3">Recent Activity</h2>
             <ActivityFeed
               activity={activity}
-              loading={loading}
+              loading={baseLoading}
             />
           </div>
 
@@ -244,7 +307,7 @@ export default function DashboardPage() {
               <div className="mt-3">
                 <ActivityFeed
                   activity={activity}
-                  loading={loading}
+                  loading={baseLoading}
                 />
               </div>
             )}
@@ -281,7 +344,7 @@ function ActivityFeed({
   if (activity.length === 0) {
     return (
       <p className="text-sm text-muted-foreground py-4">
-        No activity yet this week.
+        No activity yet.
       </p>
     );
   }

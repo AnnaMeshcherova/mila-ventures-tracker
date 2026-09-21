@@ -7,6 +7,7 @@ import { formatWeekLabel } from "@/lib/dates";
 import { useMentionBadge } from "@/components/MentionBadgeProvider";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
+import { getInitials } from "@/lib/utils";
 
 interface Mention {
   id: string;
@@ -20,13 +21,6 @@ interface Mention {
   update_id: string;
   author_name: string;
   week_start: string | null;
-}
-
-function getInitials(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 0) return "";
-  if (parts.length === 1) return parts[0][0]?.toUpperCase() ?? "";
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 export default function ActionItemsPage() {

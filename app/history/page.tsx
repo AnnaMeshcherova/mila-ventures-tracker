@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 import { formatWeekLabel, getMonday } from "@/lib/dates";
 import SearchBar from "@/components/SearchBar";
+import { getInitials } from "@/lib/utils";
 
 interface Profile {
   id: string;
@@ -24,15 +25,6 @@ interface Update {
   profiles?: Profile;
   full_name?: string;
   role?: string;
-}
-
-function getInitials(name: string): string {
-  return name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
 }
 
 function SkeletonCard() {

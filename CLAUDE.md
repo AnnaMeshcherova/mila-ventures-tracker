@@ -14,8 +14,12 @@ Do not deviate without explicit user approval.
 In QA mode, flag any code that doesn't match DESIGN.md.
 
 ## Architecture
-- Server Components for pages (dashboard, history, profile)
-- Client Components for interactive pieces (UpdateForm, SearchBar, WeekSelector, NavBar)
+- Pages are Client Components ("use client") that query Supabase from the browser
+  and rely on RLS for authorization. `/submit` is the one exception: a Server
+  Component that redirects.
+- Auth is enforced by `middleware.ts` before any page renders — pages do not need
+  their own auth checks.
+- Shared helpers live in `lib/utils.ts` (`cn`, `getInitials`). Don't re-declare them per file.
 - `lib/supabase.ts` — browser client (createClient)
 - `lib/supabase-server.ts` — server client (createServerSupabaseClient)
 - Middleware uses `getUser()` not `getSession()` per Supabase App Router docs

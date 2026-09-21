@@ -3,6 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { BulletList } from "./BulletList";
+import CommentThread, { type Comment } from "./CommentThread";
+import { getInitials } from "@/lib/utils";
 
 interface Profile {
   id: string;
@@ -11,6 +13,7 @@ interface Profile {
 }
 
 interface Update {
+  id: string;
   planned_tasks: string[];
   blockers: string[];
   achievements: string[];
@@ -21,18 +24,21 @@ interface Update {
 interface WeeklyUpdateCardProps {
   profile: Profile;
   update?: Update;
-}
-
-function getInitials(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 0) return "";
-  if (parts.length === 1) return parts[0][0]?.toUpperCase() ?? "";
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  /** Comments on this update, already filtered by the dashboard. */
+  comments?: Comment[];
+  /** Team roster, for the @mention dropdown. */
+  profiles?: Profile[];
+  currentUserId?: string | null;
+  onCommentsChanged?: () => void;
 }
 
 export default function WeeklyUpdateCard({
   profile,
   update,
+  comments = [],
+  profiles = [],
+  currentUserId = null,
+  onCommentsChanged,
 }: WeeklyUpdateCardProps) {
   const [blockersOpen, setBlockersOpen] = useState(false);
 
@@ -149,6 +155,16 @@ export default function WeeklyUpdateCard({
           >
             View history &rarr;
           </Link>
+
+          {onCommentsChanged && (
+            <CommentThread
+              updateId={update!.id}
+              comments={comments}
+              profiles={profiles}
+              currentUserId={currentUserId}
+              onChanged={onCommentsChanged}
+            />
+          )}
         </>
       ) : (
         <p className="text-sm text-muted-foreground">No update this week</p>
