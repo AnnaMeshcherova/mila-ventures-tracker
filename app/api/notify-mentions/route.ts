@@ -118,15 +118,31 @@ export async function GET(request: NextRequest) {
     Date.now() - MAX_AGE_DAYS * 24 * 60 * 60 * 1000
   ).toISOString();
 
-  const { data, error } = await supabase
+  // ?resend=<days> re-sends mentions from that window even if already
+  // notified. For one-off catch-ups; the daily cron never uses it.
+  const resendRaw = request.nextUrl.searchParams.get("resend");
+  const resendDays = resendRaw === null ? 0 : Number(resendRaw);
+  const isResend =
+    Number.isFinite(resendDays) && resendDays > 0 && resendDays <= 30;
+
+  let query = supabase
     .from("mentions")
     .select(
       "id, snippet, field_type, comment_id, " +
         "mentioned:profiles!mentions_mentioned_user_id_fkey(full_name, email), " +
         "author:profiles!mentions_author_user_id_fkey(full_name)"
-    )
-    .is("notified_at", null)
-    .gte("created_at", cutoff)
+    );
+
+  if (isResend) {
+    query = query.gte(
+      "created_at",
+      new Date(Date.now() - resendDays * 24 * 60 * 60 * 1000).toISOString()
+    );
+  } else {
+    query = query.is("notified_at", null).gte("created_at", cutoff);
+  }
+
+  const { data, error } = await query
     .order("created_at", { ascending: true })
     .limit(500);
 
@@ -135,8 +151,14 @@ export async function GET(request: NextRequest) {
   }
 
   const pending = (data ?? []) as unknown as PendingMention[];
+  const dryRun = request.nextUrl.searchParams.get("dryRun") === "1";
+
   if (pending.length === 0) {
-    return NextResponse.json({ sent: 0, mentions: 0 });
+    return NextResponse.json(
+      dryRun
+        ? { dryRun: true, wouldEmail: 0, mentions: 0, recipients: [] }
+        : { sent: 0, mentions: 0 }
+    );
   }
 
   // One email per recipient, however many mentions they accumulated.
@@ -154,7 +176,7 @@ export async function GET(request: NextRequest) {
   }
 
   // ?dryRun=1 reports who would be emailed without sending anything.
-  if (request.nextUrl.searchParams.get("dryRun") === "1") {
+  if (dryRun) {
     return NextResponse.json({
       dryRun: true,
       wouldEmail: byEmail.size,
