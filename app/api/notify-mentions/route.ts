@@ -153,6 +153,20 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ sent: 0, mentions: pending.length });
   }
 
+  // ?dryRun=1 reports who would be emailed without sending anything.
+  if (request.nextUrl.searchParams.get("dryRun") === "1") {
+    return NextResponse.json({
+      dryRun: true,
+      wouldEmail: byEmail.size,
+      mentions: pending.length,
+      recipients: [...byEmail.entries()].map(([email, { name, items }]) => ({
+        name,
+        email,
+        mentions: items.length,
+      })),
+    });
+  }
+
   const batch = [...byEmail.entries()].map(([email, { name, items }]) => ({
     from: fromAddress!,
     to: [email],
