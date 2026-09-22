@@ -84,6 +84,27 @@ function buildEmail(name: string, items: PendingMention[]): string {
   </div>`;
 }
 
+function buildText(name: string, items: PendingMention[]): string {
+  const lines = items.map((m) => {
+    const author = m.author?.full_name ?? "A teammate";
+    const where = humanField(m.field_type, m.comment_id !== null);
+    const snippet = m.snippet?.trim() ? `\n  "${m.snippet.trim()}"` : "";
+    return `- ${author} mentioned you in ${where}${snippet}`;
+  });
+
+  return [
+    `Hi ${name.split(/\s+/)[0] ?? name},`,
+    "",
+    `You were mentioned ${
+      items.length === 1 ? "once" : `${items.length} times`
+    } in the Mila Ventures tracker.`,
+    "",
+    ...lines,
+    "",
+    `View your action items: ${SITE_URL}/action-items`,
+  ].join("\n");
+}
+
 export async function GET(request: NextRequest) {
   const secret = process.env.CRON_SECRET;
   const resendKey = process.env.RESEND_API_KEY;
@@ -198,14 +219,21 @@ export async function GET(request: NextRequest) {
     });
   }
 
+  // A display name and a plain-text part both materially improve
+  // deliverability versus a bare address with HTML only.
+  const from = fromAddress!.includes("<")
+    ? fromAddress!
+    : `Mila Ventures Tracker <${fromAddress}>`;
+
   const batch = [...byEmail.entries()].map(([email, { name, items }]) => ({
-    from: fromAddress!,
+    from,
     to: [email],
     subject:
       items.length === 1
         ? `${items[0].author?.full_name ?? "Someone"} mentioned you`
         : `You were mentioned ${items.length} times`,
     html: buildEmail(name, items),
+    text: buildText(name, items),
   }));
 
   const res = await fetch("https://api.resend.com/emails/batch", {
