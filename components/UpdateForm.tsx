@@ -157,7 +157,7 @@ export default function UpdateForm({
         data: { user },
       } = await supabase.auth.getUser();
 
-      if (user && allMentions.length > 0) {
+      if (user) {
         // Get the update id
         const { data: update } = await supabase
           .from("weekly_updates")
