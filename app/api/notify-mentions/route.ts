@@ -12,6 +12,14 @@ import { createClient } from "@supabase/supabase-js";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
+/**
+ * Never email about a mention older than this. Two reasons: notified_at was
+ * added long after mentions existed, so the whole backlog reads as
+ * un-notified; and a mention nobody was told about for a week is stale news.
+ * Wide enough that a failed send still gets retried on later runs.
+ */
+const MAX_AGE_DAYS = 7;
+
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ?? "https://mila-ventures-tracker.vercel.app";
 
@@ -106,6 +114,10 @@ export async function GET(request: NextRequest) {
     { auth: { persistSession: false } }
   );
 
+  const cutoff = new Date(
+    Date.now() - MAX_AGE_DAYS * 24 * 60 * 60 * 1000
+  ).toISOString();
+
   const { data, error } = await supabase
     .from("mentions")
     .select(
@@ -114,6 +126,7 @@ export async function GET(request: NextRequest) {
         "author:profiles!mentions_author_user_id_fkey(full_name)"
     )
     .is("notified_at", null)
+    .gte("created_at", cutoff)
     .order("created_at", { ascending: true })
     .limit(500);
 
