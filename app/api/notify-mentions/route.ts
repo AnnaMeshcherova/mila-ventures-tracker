@@ -171,6 +171,15 @@ export async function GET(request: NextRequest) {
     else byEmail.set(email, { name: m.mentioned!.full_name, items: [m] });
   }
 
+  // ?only=<email> restricts the send to one recipient, for safely testing a
+  // template change without mailing the whole team.
+  const only = request.nextUrl.searchParams.get("only");
+  if (only) {
+    for (const key of [...byEmail.keys()]) {
+      if (key.toLowerCase() !== only.toLowerCase()) byEmail.delete(key);
+    }
+  }
+
   if (byEmail.size === 0) {
     return NextResponse.json({ sent: 0, mentions: pending.length });
   }
