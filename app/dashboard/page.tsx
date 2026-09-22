@@ -98,7 +98,12 @@ export default function DashboardPage() {
   useEffect(() => {
     async function fetchBase() {
       const [profilesRes, activityRes, userRes] = await Promise.all([
-        supabase.from("profiles").select("id, full_name, role"),
+        supabase
+          .from("profiles")
+          .select("id, full_name, role")
+          // departed teammates are hidden from the roster and the @mention
+          // picker; their past updates stay intact everywhere else
+          .eq("active", true),
         supabase
           .from("weekly_updates")
           .select("user_id, updated_at, profiles(full_name)")

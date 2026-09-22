@@ -57,6 +57,7 @@ export default function UpdateForm({
       const { data, error } = await supabase
         .from("profiles")
         .select("id, full_name")
+        .eq("active", true)
         .order("full_name");
       if (!error && data) {
         setProfiles(data);
