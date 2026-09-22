@@ -58,7 +58,10 @@ export const config = {
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      * - public files (images, etc.)
+     * - /api/notify-mentions: called by Vercel cron with no user session;
+     *   it authenticates itself with CRON_SECRET instead. Without this it
+     *   would be redirected to /auth/login and never run.
      */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!api/notify-mentions|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
